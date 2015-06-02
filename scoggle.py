@@ -7,7 +7,6 @@ try:
 except Exception:
 	import configparser as ConfigParser
 
-import fs
 import requests
 
 # API credentials
@@ -15,13 +14,13 @@ API_URL = 'https://scoggle.herokuapp.com'
 API_KEY = ''
 
 # Here we store the configuration file
-CFG_FILE = fs.join(fs.home(), '.scogglerc')
+CFG_FILE = os.path.join(os.path.expanduser("~"), '.scogglerc')
 
 CUR_PRO = None
 CUR_RUN = None
 
 # Read Configuration File
-if fs.exists(CFG_FILE):
+if os.path.isfile(CFG_FILE):
 	"""Read the ~/.scogglerc config file"""
 	settings = ConfigParser.ConfigParser()
 	settings.read(CFG_FILE)
