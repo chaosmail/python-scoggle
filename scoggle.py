@@ -1,29 +1,63 @@
 from __future__ import print_function
+import os
 import json
 import getpass
+try:
+	import ConfigParser
+except Exception:
+	import configparser as ConfigParser
+
+import fs
 import requests
 
-API_URL = "http://127.0.0.1:8081/api/v1"
-API_KEY = ""
+# API credentials
+API_URL = 'https://scoggle.herokuapp.com'
+API_KEY = ''
+
+# Here we store the configuration file
+CFG_FILE = fs.join(fs.home(), '.scogglerc')
 
 CUR_PRO = None
 CUR_RUN = None
 
+# Read Configuration File
+if fs.exists(CFG_FILE):
+	"""Read the ~/.scogglerc config file"""
+	settings = ConfigParser.ConfigParser()
+	settings.read(CFG_FILE)
 
-def init(api_key):
-	"""Initializes the Scoggle API"""
+	API_URL = settings.get('global', 'url').strip('"')
+	API_KEY = settings.get('global', 'key').strip('"')	
 
+# Read from environment vars
+API_URL = os.getenv('SCOGGLE_URL', API_URL).strip('"')
+API_KEY = os.getenv('SOCGGLE_KEY', API_KEY).strip('"')
+
+# Add the prefix to API_URL
+API_URL += '/api/v1'
+
+def key(value):
+	"""Initializes the Scoggle API key"""
 	global API_KEY
+	API_KEY = value
 
-	url = '%s/project' % (API_URL)
-	header = {'Authorization': 'Token %s' % api_key}
+def url(value):
+	"""Initializes the Scoggle API url"""
+	global API_URL
+	API_URL = value
+
+def check():
+	if not is_valid():
+		raise ValueError('Your scoggle credentials are not valid!')
+
+def is_valid():
+	url = '%s/project/' % (API_URL)
+	header = {'Authorization': 'Token %s' % API_KEY}
 	res = requests.get(url, headers=header)
 
 	if res.status_code is not 200:
-		raise ValueError('Can not use api key')
-
-	API_KEY = api_key
-
+		return False
+	return True
 
 def project(slug, name=""):
 	"""Loads the current project"""
@@ -31,7 +65,7 @@ def project(slug, name=""):
 	global CUR_PRO
 
 	header = {'Authorization': 'Token %s' % API_KEY}
-	url = '%s/project?slug=%s' % (API_URL, slug)
+	url = '%s/project/?slug=%s' % (API_URL, slug)
 	
 	res = requests.get(url, headers=header)
 
@@ -65,37 +99,37 @@ def make_project(slug, name=""):
 	else:
 		raise ValueError('Problem while creating project')
 
-def run(slug, name=""):
+def run(slug, name="", color="steelblue"):
 
 	global CUR_RUN
 
 	header = {'Authorization': 'Token %s' % API_KEY}
-	url = '%s/run?project_id=%s&slug=%s' % (API_URL, CUR_PRO['project_id'], slug)
+	url = '%s/run/?project_id=%s&slug=%s' % (API_URL, CUR_PRO['project_id'], slug)
 
 	res = requests.get(url, headers=header)
 	
-	if res.status_code is 200:
-
-		runs = res.json()
-
-		if len(runs) > 0:
-			CUR_RUN = runs[0]
-		else:
-			make_run(slug, name)
-
-	else:
+	if res.status_code is not 200:
 		raise ValueError('Problem while retrieving run')
 
-def make_run(slug, name=""):
+	runs = res.json()
+
+	if len(runs) > 0:
+		CUR_RUN = runs[0]
+	else:
+		make_run(slug, name, color)
+		
+
+def make_run(slug, name="", color="steelblue"):
 
 	global CUR_RUN
 
 	header = {'Authorization': 'Token %s' % API_KEY}
-	url = '%s/run?project_id=%s' % (API_URL, CUR_PRO['project_id'])
+	url = '%s/run/?project_id=%s' % (API_URL, CUR_PRO['project_id'])
 
 	data = {
 		'slug': slug,
 		'name': name,
+		'color': color,
 	}
 	res = requests.post(url, data=data, headers=header)
 
@@ -111,8 +145,9 @@ def score(score, params={}, duration=0, is_valid=True):
 	if not CUR_RUN:
 		run(getpass.getuser())
 
+
 	data = {
-		'score': score,
+		'score': "%.12f" % score,
 		'params': params,
 		'duration': duration,
 		'is_valid': is_valid
@@ -128,4 +163,4 @@ def score(score, params={}, duration=0, is_valid=True):
 	res = requests.post(url, data=json.dumps(data), headers=header)
 
 	if res.status_code is not 201:
-		raise ValueError('Can not submit score')
+		raise ValueError('Can not submit score. %s' % res.text)
